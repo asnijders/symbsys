@@ -45,7 +45,7 @@ def main():
         if verbose:
             print("Solving sudoku using the SAT encoding..");
             timer.start();
-        with suppress_stdout_stderr():
+        # with suppress_stdout_stderr():
             solved_sudoku = solve_sudoku_SAT(sudoku,k);
         if verbose:
             timer.stop();
@@ -54,7 +54,7 @@ def main():
         if verbose:
             print("Solving sudoku using the CSP encoding..");
             timer.start();
-        with suppress_stdout_stderr():
+        # with suppress_stdout_stderr():
             solved_sudoku = solve_sudoku_CSP(sudoku,k);
         if verbose:
             timer.stop();
@@ -63,7 +63,7 @@ def main():
         if verbose:
             print("Solving sudoku using the ASP encoding..");
             timer.start();
-        with suppress_stdout_stderr():
+        # with suppress_stdout_stderr():
             solved_sudoku = solve_sudoku_ASP(sudoku,k);
         if verbose:
             timer.stop();
@@ -72,7 +72,7 @@ def main():
         if verbose:
             print("Solving sudoku using the ILP encoding..");
             timer.start();
-        with suppress_stdout_stderr():
+        # with suppress_stdout_stderr():
             solved_sudoku = solve_sudoku_ILP(sudoku,k);
         if verbose:
             timer.stop();
@@ -81,7 +81,7 @@ def main():
         if verbose:
             print("Solving sudoku using recursion and propagation..");
             timer.start();
-        with suppress_stdout_stderr():
+        # with suppress_stdout_stderr():
             solved_sudoku = solve_sudoku_prop(sudoku,k);
         if verbose:
             timer.stop();
@@ -229,8 +229,39 @@ class suppress_stdout_stderr(object):
 ### Solver that uses recursion and propagation
 ###
 def solve_sudoku_prop(sudoku,k):
+    """
+    This function will first create a sudoku_possible_values data structure.
+    It will then call the solve_recursively() function using this data_structure
+
+    """
 
     # Initialize data structure
+    """
+    the purpose of this function is to determine the initial range of possible values for the
+    empty cells in the input sudoku. For instance, with the sudoku below, the possible values for the
+    first 3 cells, in the top-left cell, are:
+    Input sudoku:
+    +-------+-------+-------+
+    |       | 2 6   | 7   1 | 
+    | 6 8   |   7   |   9   | 
+    | 1 9   |     4 | 5     | 
+    +-------+-------+-------+
+    | 8 2   | 1     |   4   | 
+    |     4 | 6   2 | 9     | 
+    |   5   |     3 |   2 8 | 
+    +-------+-------+-------+
+    |     9 | 3     |   7 4 | 
+    |   4   |   5   |   3 6 | 
+    | 7   3 |   1 8 |       | 
+    +-------+-------+-------+
+
+    [1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9], [1, 2, 3, 4, 5, 6, 7, 8, 9] 
+    Middle cell, first row:
+    [2], [6], [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    Third cell, first row:
+    [7], [1, 2, 3, 4, 5, 6, 7, 8, 9], [1]
+    We generate these lists of possible values for all the rows in the input sudoku
+    """
     sudoku_possible_values = [];
     for row in sudoku:
         row_possibilities = [];
@@ -240,9 +271,13 @@ def solve_sudoku_prop(sudoku,k):
             else:
                 possibilities = [element];
             row_possibilities.append(possibilities);
+
+
         sudoku_possible_values.append(row_possibilities);
 
     # Find a cell where there is still more than one possibility
+    """here we take in sudoku_possible_values again, and check whether there is still a cell with more than one poss
+    we go over all entries in the matrix. if there is still an entry with len(entry)==1, then this function holds"""
     def find_uncertain_cell(sudoku_possible_values):
         for i in range(k**2):
             for j in range(k**2):
@@ -253,13 +288,28 @@ def solve_sudoku_prop(sudoku,k):
 
     # Check if we ran into a contradiction
     def contradiction(sudoku_possible_values):
+        """
+        this function takes as input the suduku_possible_values data structure, and checks for 3 types of contradictions.
+        If any of these contradictions holds, the function returns None.
+        """
+
         # Contradiction type 1: some cell has no further possible values
+        """
+        In this contradiction, we check all the rows of the matrix; 
+        we then simply check whether the sudoku_possible_values has any empty cells (for whatever reason);
+        if so, then 
+        """
         for i in range(k**2):
             for j in range(k**2):
                 possibilities = sudoku_possible_values[i][j];
                 if len(possibilities) == 0:
                     return True;
         # Contradiction type 2a: two cells in the same row are assigned the same value
+        """
+        Here, we loop over all the entries in the possible values matrix. If an entry has a len == 1, 
+        then we assign the entry from that entry to the _value_ variable, and append it to the
+        certain_values list; we then check whether certain values occur twice.
+        """
         for i in range(k**2):
             certain_values = [];
             for j in range(k**2):
@@ -271,6 +321,9 @@ def solve_sudoku_prop(sudoku,k):
                     else:
                         certain_values.append(value);
         # Contradiction type 2b: two cells in the same column are assigned the same value
+        """
+        same thing as the previous contradiction, but now we check column-wise
+        """
         for j in range(k**2):
             certain_values = [];
             for i in range(k**2):
@@ -311,16 +364,29 @@ def solve_sudoku_prop(sudoku,k):
 
     # Recursive function to solve the sudoku, using propagate()
     def solve_recursively(sudoku_possible_values):
+        """
+        This function first checks whether the sudoku_possible_values includes a contradiction,
+        using the function contradiction()
+        """
+
         # Check if we ran into a contradiction:
+        """
+        This function just checks if stuff is valid
+        """
         if contradiction(sudoku_possible_values):
             return None;
         else:
             # Propagate
             sudoku_possible_values = propagate(sudoku_possible_values,k);
-            # Check for contradictions
+            # Check for contradictions *again*
             if contradiction(sudoku_possible_values):
                 return None;
-            # Find a cell that is still uncertain
+            # Find a cell that is still uncertain (?)
+            """
+            this function determines whether the possible values matrix still has entries with len > 1
+            if this is not the case, and given that the matrix has no contradictions, we return the sudoku_possible_values
+            otherwise, we recurse on the different values for cell i,j in the matrix
+            """
             uncertain_cell = find_uncertain_cell(sudoku_possible_values);
             if uncertain_cell == None:
                 return sudoku_possible_values;

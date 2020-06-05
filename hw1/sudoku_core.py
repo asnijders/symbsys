@@ -2,8 +2,17 @@ from pprint import pprint
 # from sudoku import pretty_repr
 import sys
 import numpy as np
+
+# SAT dependencies
 from pysat.formula import CNF
 from pysat.solvers import MinisatGH
+
+# CSP dependencies
+from ortools.sat.python import cp_model
+
+#ILP dependencies
+import gurobipy as gp
+from gurobipy import GRB
 
 ### Propagation function to be used in the recursive sudoku solver
 def propagate(sudoku_possible_values,k):
@@ -95,25 +104,24 @@ def propagate(sudoku_possible_values,k):
                         if len(allowed_values) == 0:
                             break
 
-
+    # if the input matrix did not have any certain cells, we return a k**2 * k**2 matrix which violates the
+    # contradiction function in solve_sudoku_prop, thereby yielding a "no solution"
     if counter == 0:
         entry = [1,]
         row = [entry] * (k**2)
         matrix = [row] * (k**2)
         return matrix
+    else:
+        return sudoku_possible_values
 
 
-
-    return sudoku_possible_values
-
-###
 ### Solver that uses SAT encoding
-###
 def solve_sudoku_SAT(sudoku,k):
+    """
+    This function encodes the sudoku problem into SAT, and uses a SAT solver to solve the problem
+    """
 
-
-
-    # First we create a list containing all the edges for a given vertice i,j
+    # First we create a list containing all the edges for all vertices in the sudoku
     length = len(sudoku)
     num_vertices = length**2
     matrix = np.arange(num_vertices).reshape(length, length)
@@ -202,6 +210,7 @@ def solve_sudoku_SAT(sudoku,k):
     if answer == True:
         print("The sudoku is solved.")
         model = solver.get_model()
+        print(model)
         for i in range(1, num_vertices + 1):
             for c in range(1, num_values + 1):
                 if var_number(i, c) in model:
@@ -212,20 +221,187 @@ def solve_sudoku_SAT(sudoku,k):
         return None
 
 
-###
 ### Solver that uses CSP encoding
-###
 def solve_sudoku_CSP(sudoku,k):
-    return None;
+    # First we create a list containing all the edges for all vertices in the sudoku
+    length = len(sudoku)
+    num_vertices = length ** 2
+    matrix = np.arange(num_vertices).reshape(length, length)
+    # edges = {'squares':[], 'rows':[], 'columns':[]}
+    edges = []
+    sudoku = np.array(sudoku).reshape(length * length)
 
-###
+    # The loop below fills the edges list with all edges in the sudoku
+    for i in range(length):
+        for j in range(length):
+
+            # specify the current value i,j as the left-hand value for the edge tuple
+            left = int(matrix[i][j] + 1)
+
+            # iterate over values in the square
+            col = j // k
+            row = i // k
+            rows = matrix[(row * k):(row * k + k)]
+            box = [x[(col * k):(col * k + k)] for x in rows]
+            for v in range(k):
+                for w in range(k):
+                    right = int(box[v][w] + 1)
+
+                    # make sure that we're not assigning the current value as the right-hand vertix
+                    if (row * k + v, col * k + w) != (i, j):
+                        if (right,left) not in edges:
+                            edges.append((left, right))
+
+            # iterative over cells in row i,
+            for g in range(length):
+                right = int(matrix[i][g] + 1)
+                if (i, g) != (i, j):
+                    if (right,left) not in edges:
+                        edges.append((left, right))
+
+            # iterate over cells in column j,
+            for c in range(length):
+                right = int(matrix[c][j] + 1)
+                if (c, j) != (i, j):
+                    if (right,left) not in edges:
+                        # edges['columns'].append((left, right))
+                        edges.append((left, right))
+
+    # for each variable in the sudoku we set a domain d {1,2,.....,9}, except for the variables
+    # for which we already have a fixed value
+
+    print(len(edges))
+    # sys.exit()
+    # max_val = sum(range(0,length+1))
+    # print(max_val)
+    model = cp_model.CpModel()
+    vars = dict()
+
+    # domain = {}
+    # for i in range(1, num_vertices +1):
+    #     domain[i] = []
+    #
+    # boxes = []
+    # for i in range(k):
+    #     for j in range(k):
+    #         box = []
+    #         rows = matrix[i*k:(i+1)*k]
+    #         for row in rows:
+    #             subrow = row[j*k:(j+1)*k].tolist()
+    #             for x in subrow:
+    #                 box.append(sudoku[x])
+    #         boxes.append(box)
+    #
+    # rows = []
+    # for i in range(length):
+    #     row = []
+    #     for j in range(length):
+    #         row.append(sudoku[matrix[i][j]])
+    #     # for idx in range(1, idxs)
+    #     rows.append(row)
+    #
+    # columns = []
+    # for i in range(length):
+    #     column = []
+    #     for j in range(length):
+    #         column.append(sudoku[matrix[j][i]])
+    #     # for idx in range(1, idxs)
+    #     columns.append(column)
+    #
+    # columns = columns * length
+    #
+    # for i in range(num_vertices):
+    #     row_idx = i // length
+    #     for x in rows[row_idx]:
+    #         domain[i+1].append(x)
+    #
+    # for i in range(num_vertices):
+    #     for x in columns[i]:
+    #         domain[i+1].append(x)
+    #
+    # # for i in range(1, length+1):
+    # #     for j in range(1, length+1):
+    # #         idx = i*j
+    # #         for x in boxes[i-1]:
+    # #             domain[idx].append(x)
+    #
+    # print(set(domain[2]))
+    #
+    #
+    # # for i in range(1, length+1):
+    # #     for j in range(1, length+1):
+    # #         idx = i*j
+    # #         for x in boxes[i-1]:
+    # #             domain[idx].append(x)
+    #
+    #
+    #         # for x in rows[i-1]:
+    #         #     domain[idx].append(x)
+    #         # for x in columns[i-1]:
+    #         #     domain[idx].append(x)
+    #
+    #         # domain[idx].append(rows[i-1])
+    #
+    #         # domain[idx].append(columns)
+    #
+    #     # print(set(domain[24]))
+    #     # sys.exit()
+    #
+    #
+    #
+    # Set domains for each variable
+    for i in range(1, num_vertices + 1):
+        sudoku_val = int(sudoku[i-1])
+        if sudoku_val == 0:
+            vars[i] = model.NewIntVar(1, length, "x{}".format(i))
+        else:
+            vars[i] = model.NewIntVar(sudoku_val, sudoku_val, "x{}".format(i))
+            # vars[i] = model.NewIntVar(1, 9, "x{}".format(i))
+
+    for (i, j) in edges:
+        # model.AddAllDifferent([vars[i], vars[j]])
+        model.Add(vars[i] != vars[j])
+    # for i in range(length):
+    #     row = []
+    #     for j in range(length):
+    #         row.append(vars[matrix[i][j]+1])
+    #     model.Add(sum(row) == max_val)
+    #     model.AddAllDifferent(row)
+    #
+    # for i in range(length):
+    #     col = []
+    #     for j in range(length):
+    #         col.append(vars[matrix[j][i]+1])
+    #     model.Add(sum(col) == max_val)
+    #     model.AddAllDifferent(col)
+    #
+    # for i in range(k):
+    #     for j in range(k):
+    #         rows = matrix[i*k:(i+1)*k]
+    #         box = []
+    #         for row in rows:
+    #             subrow = row[j*k:(j+1)*k].tolist()
+    #             for x in subrow:
+    #                 box.append(vars[x+1])
+    #         model.Add(sum(box) == max_val)
+    #         model.AddAllDifferent(box)
+    # print('start solving')
+
+    solver = cp_model.CpSolver()
+    answer = solver.Solve(model)
+    matrix = matrix.reshape(length**2)
+    if answer == cp_model.FEASIBLE:
+        for i in range(1, num_vertices + 1):
+            matrix[i-1] = solver.Value(vars[i])
+        return matrix.reshape(length, length).tolist()
+    else:
+        return None
+
+
 ### Solver that uses ASP encoding
-###
 def solve_sudoku_ASP(sudoku,k):
     return None;
 
-###
 ### Solver that uses ILP encoding
-###
 def solve_sudoku_ILP(sudoku,k):
     return None;

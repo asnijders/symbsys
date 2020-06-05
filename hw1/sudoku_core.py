@@ -400,8 +400,100 @@ def solve_sudoku_CSP(sudoku,k):
 
 ### Solver that uses ASP encoding
 def solve_sudoku_ASP(sudoku,k):
-    return None;
+    return None
 
 ### Solver that uses ILP encoding
 def solve_sudoku_ILP(sudoku,k):
-    return None;
+    model = gp.Model()
+
+    # First we create a list containing all the edges for all vertices in the sudoku
+    length = len(sudoku)
+    num_vertices = length ** 2
+    matrix = np.arange(num_vertices).reshape(length, length)
+    # edges = {'squares':[], 'rows':[], 'columns':[]}
+    edges = []
+    sudoku = np.array(sudoku).reshape(length * length)
+
+    # The loop below fills the edges list with all edges in the sudoku
+    for i in range(length):
+        for j in range(length):
+
+            # specify the current value i,j as the left-hand value for the edge tuple
+            left = int(matrix[i][j] + 1)
+
+            # iterate over values in the square
+            col = j // k
+            row = i // k
+            rows = matrix[(row * k):(row * k + k)]
+            box = [x[(col * k):(col * k + k)] for x in rows]
+            for v in range(k):
+                for w in range(k):
+                    right = int(box[v][w] + 1)
+
+                    # make sure that we're not assigning the current value as the right-hand vertix
+                    if (row * k + v, col * k + w) != (i, j):
+                        if (right, left) not in edges:
+                            edges.append((left, right))
+
+            # iterative over cells in row i,
+            for g in range(length):
+                right = int(matrix[i][g] + 1)
+                if (i, g) != (i, j):
+                    if (right, left) not in edges:
+                        edges.append((left, right))
+
+            # iterate over cells in column j,
+            for c in range(length):
+                right = int(matrix[c][j] + 1)
+                if (c, j) != (i, j):
+                    if (right, left) not in edges:
+                        # edges['columns'].append((left, right))
+                        edges.append((left, right))
+
+    print(edges)
+
+    num_values = length
+
+    # create vars for each entry: if we have an uncertain value, make entries in var for all v's in the range {1, ..., length}
+    # otherwise, if sudoku_val != 0, assign to v the certain value from the sudoku and ignore the other values of v
+    vars = dict()
+    for i in range(1, num_vertices + 1):
+        sudoku_val = int(sudoku[i-1])
+        if sudoku_val == 0:
+            for v in range(1, num_values + 1):
+                vars[(i, v)] = model.addVar(vtype=GRB.BINARY, name="x({},{})".format(i, v))
+        else:
+            vars[(i, sudoku_val)] = model.addVar(vtype=GRB.BINARY, name="x({},{})".format(i, sudoku_val))
+
+    # Now we add a constraint which essentially says that for a given variable, we can assign at most one v to it
+    # We also add a hard-coded constraint that each certain vertex, the variable with the certain value must exist
+    for i in range(1, num_vertices + 1):
+        sudoku_val = int(sudoku[i - 1])
+        if sudoku_val == 0:
+            model.addConstr(gp.quicksum([vars[(i, v)] for v in range(1, num_values + 1)]) == 1)
+        else:
+            model.addConstr(gp.quicksum([vars[(i, sudoku_val)]]) == 1)
+
+    # For each edge, we are iterating over all possible values v. However, for some entries in the var dict,
+    # we already knew what value v should take.
+    for (i1, i2) in edges:
+        for v in range(1, num_values + 1):
+            if (i1, v) in vars.keys() and (i2, v) in vars.keys():
+                model.addConstr(vars[(i1, v)] + vars[(i2, v)] <= 1)
+
+    model.optimize()
+
+    # Printing the solution:
+    matrix = matrix.reshape(length ** 2)
+    if model.status == GRB.OPTIMAL:
+        for i in range(1, num_vertices + 1):
+            for v in range(1, num_values + 1):
+                if (i, v) in vars.keys():
+                    if vars[(i, v)].x == 1:
+                        matrix[i-1] = v
+        return matrix.reshape(length, length).tolist()
+
+    else:
+        return None
+
+

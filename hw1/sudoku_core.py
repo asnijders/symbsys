@@ -25,7 +25,7 @@ def propagate(sudoku_possible_values,k):
     hard5.sudoku: seemingly endless
     """
     # Instantiate a counter to track # of cells with len == 1; if no such cells are found, matrix is empty
-    counter = 0
+    # counter = 0
 
     #iterate over rows
     for i in range(len(sudoku_possible_values)):
@@ -36,9 +36,9 @@ def propagate(sudoku_possible_values,k):
             if len(sudoku_possible_values[i][j]) == 0:
                 return None
             #skip cells where the domain consists of a single value already
-            if len(sudoku_possible_values[i][j]) == 1:
-                counter += 1
-                continue
+            # if len(sudoku_possible_values[i][j]) == 1:
+            #     counter += 1
+            #     continue
             #only look at uncertain cells
             elif len(sudoku_possible_values[i][j]) > 1:
                 #specify the domain D of the current cell
@@ -106,13 +106,13 @@ def propagate(sudoku_possible_values,k):
 
     # if the input matrix did not have any certain cells, we return a k**2 * k**2 matrix which violates the
     # contradiction function in solve_sudoku_prop, thereby yielding a "no solution"
-    if counter == 0:
-        entry = [1,]
-        row = [entry] * (k**2)
-        matrix = [row] * (k**2)
-        return matrix
-    else:
-        return sudoku_possible_values
+    # if counter == 0:
+    # entry = [1,]
+    # row = [entry] * (k**2)
+    # matrix = [row] * (k**2)
+    return sudoku_possible_values
+    # else:
+    #     return sudoku_possible_values
 
 
 ### Solver that uses SAT encoding
@@ -210,7 +210,6 @@ def solve_sudoku_SAT(sudoku,k):
     if answer == True:
         print("The sudoku is solved.")
         model = solver.get_model()
-        print(model)
         for i in range(1, num_vertices + 1):
             for c in range(1, num_values + 1):
                 if var_number(i, c) in model:
@@ -270,7 +269,6 @@ def solve_sudoku_CSP(sudoku,k):
     # for each variable in the sudoku we set a domain d {1,2,.....,9}, except for the variables
     # for which we already have a fixed value
 
-    print(len(edges))
     # sys.exit()
     # max_val = sum(range(0,length+1))
     # print(max_val)
@@ -449,8 +447,6 @@ def solve_sudoku_ILP(sudoku,k):
                     if (right, left) not in edges:
                         # edges['columns'].append((left, right))
                         edges.append((left, right))
-
-    print(edges)
 
     num_values = length
 

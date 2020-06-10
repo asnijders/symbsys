@@ -10,9 +10,12 @@ from pysat.solvers import MinisatGH
 # CSP dependencies
 from ortools.sat.python import cp_model
 
-#ILP dependencies
+# ILP dependencies
 import gurobipy as gp
 from gurobipy import GRB
+
+# ASP dependencies
+import clingo
 
 ### Propagation function to be used in the recursive sudoku solver
 def propagate(sudoku_possible_values,k):
@@ -398,7 +401,181 @@ def solve_sudoku_CSP(sudoku,k):
 
 ### Solver that uses ASP encoding
 def solve_sudoku_ASP(sudoku,k):
-    return None
+
+    # First we create a list containing all the edges for all vertices in the sudoku
+    length = len(sudoku)
+    num_vertices = length ** 2
+    matrix = np.arange(num_vertices).reshape(length, length)
+    # edges = {'squares':[], 'rows':[], 'columns':[]}
+    edges = []
+    sudoku = np.array(sudoku).reshape(length * length)
+
+    # The loop below fills the edges list with all edges in the sudoku
+    for i in range(length):
+        for j in range(length):
+
+            # specify the current value i,j as the left-hand value for the edge tuple
+            left = int(matrix[i][j] + 1)
+
+            # iterate over values in the square
+            col = j // k
+            row = i // k
+            rows = matrix[(row * k):(row * k + k)]
+            box = [x[(col * k):(col * k + k)] for x in rows]
+            for v in range(k):
+                for w in range(k):
+                    right = int(box[v][w] + 1)
+
+                    # make sure that we're not assigning the current value as the right-hand vertix
+                    if (row * k + v, col * k + w) != (i, j):
+                        if (right, left) not in edges:
+                            edges.append((left, right))
+
+            # iterative over cells in row i,
+            for g in range(length):
+                right = int(matrix[i][g] + 1)
+                if (i, g) != (i, j):
+                    if (right, left) not in edges:
+                        edges.append((left, right))
+
+            # iterate over cells in column j,
+            for c in range(length):
+                right = int(matrix[c][j] + 1)
+                if (c, j) != (i, j):
+                    if (right, left) not in edges:
+                        # edges['columns'].append((left, right))
+                        edges.append((left, right))
+
+    # We encode the graph in ASP
+    asp_code = ""
+    for i in range(1, num_vertices + 1):
+        asp_code += '\n\tvertex(v{}).'.format(i)
+
+    for (i,j) in edges:
+        asp_code += '\n\tedge(v{},v{}).'.format(i,j)
+
+    asp_code += '\n\t'
+
+    for value in range(1, length +1):
+        rule = 'value(V,{}) :- vertex(V)'.format(value)
+
+        for i in range(1, length+1):
+            if i != value:
+                rule += ', not value(V,{})'.format(i)
+        rule += '.'
+        asp_code += """{}\n\t""".format(rule)
+
+    # for value in range(1, length+1):
+    #     rule = 'value(V,{}) :- vertex(V), not color (V,2), not color (V,3)'
+
+
+    # print_answer_sets("""
+    #     choice(1..{}).
+    #     choose(X,a) :- not choose(X,b), choice(X).
+    #     choose(X,b) :- not choose(X,a), choice(X).
+    # """.format(k))
+
+    for i in range(length**2):
+        # if i == :
+        #     break
+        if sudoku[i] != 0:
+            val = sudoku[i]
+            asp_code += '\n\tvalue(v{},{}) :- vertex(v{}).'.format(i+1,val,i+1)
+
+    asp_code += """
+        :- edge(V1,V2), value(V1,C), value(V2,C).
+    """
+
+
+    # asp_code += """
+    #     value(v1,2) :- vertex(v1).
+    # """
+
+    asp_code += """
+        #show value/2.
+    """
+
+
+    # asp_code_2 = ''
+    #
+    # asp_code_2 += """
+    #     vertex(v1).
+    #     vertex(v2).
+    #     vertex(v3).
+    #     vertex(v4).
+    #     edge(v1,v2).
+    #     edge(v1,v3).
+    #     edge(v2,v3).
+    #     edge(v2,v4).
+    #     edge(v3,v4).
+    # """;
+    #
+    # asp_code_2 += """
+    #     color(V,1) :- vertex(V), not color(V,2), not color(V,3).
+    #     color(V,2) :- vertex(V), not color(V,1), not color(V,3).
+    #     color(V,3) :- vertex(V), not color(V,1), not color(V,2).
+    # """
+    #
+    # asp_code_2 += """
+    #     :- edge(V1,V2), color(V1,C), color(V2,C).
+    # """
+    #
+    # asp_code_2 += """
+    #     #show color/2.
+    # """
+    #
+    # print(asp_code)
+    #
+    # print(asp_code_2)
+
+
+    # print_answer_sets(asp_code)
+
+    control = clingo.Control()
+    control.add("base", [], asp_code)
+    control.ground([("base", [])])
+
+    def on_model(model):
+        model.symbols(shown=False)
+
+
+    control.configuration.solve.models = 1
+    answer = control.solve(on_model=on_model)
+
+    if answer.satisfiable:
+        solution = []
+        with control.solve(yield_=True) as handle:
+            for model in handle:
+                # solution.append(model.symbols(shown=True))
+
+                for atom in model.symbols(shown=True):
+                    solution.append(str(atom))
+
+
+        solution.sort(key=lambda x: int(x.split(',')[0].split('(v')[-1]))
+
+        result = np.ones(length**2, dtype=int)
+
+        for i, vertex in enumerate(solution):
+            res = vertex[:-1].split(',')[-1]
+            res = int(res)
+            result[i] = res
+
+        result = result.reshape(length,length).tolist()
+
+        return result
+    else:
+        return None
+
+
+
+
+    # if answer.satisfiable == True:
+    #     print("The sudoku has a solution")
+    # else:
+    #     print("The graph is not 3-colorable")
+    #     sys.exit()
+
 
 ### Solver that uses ILP encoding
 def solve_sudoku_ILP(sudoku,k):
